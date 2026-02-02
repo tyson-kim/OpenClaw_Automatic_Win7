@@ -1,4 +1,16 @@
 <# : batch script
+:: ============================================================================
+:: [OpenClaw Init Script - Windows 7 Compatibility Changelog]
+:: ----------------------------------------------------------------------------
+:: Date: 2026-02-03 02:22:00 | Version Index: 002 | Subject: Node 13 + Recompile
+:: ----------------------------------------------------------------------------
+:: 1. Reverted to Node v13.14.0 (Official Stable) to fix ADVAPI32.dll crash.
+:: 2. Added AUTO-RECOMPILE logic: Builds source code to ES2019/CommonJS to
+::    fix "ERR_UNSUPPORTED_ESM_URL_SCHEME" on Node 13.
+:: 3. Added Auto-Cleanup: Detects & removes incompatible v16 versions.
+:: 4. Fixed "Window Auto-Close": Added Pause/Exit on extraction failure.
+:: 5. Fixed "Flat ZIP": Added logic to handle dist/ folder in root.
+:: ============================================================================
 @echo off
 setlocal
 cd /d "%~dp0"
