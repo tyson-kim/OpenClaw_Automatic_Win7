@@ -80,7 +80,7 @@ if ($IsWin10OrHigher) {
 }
 else {
     Write-Host ">> Detected Windows 7/Legacy (Version $($OSVersion.Major).$($OSVersion.Minor))" -ForegroundColor Yellow
-    $NodeVersion = "v16.20.2"  # Unofficial Backport (Alex313031)
+    $NodeVersion = "v13.14.0"  # Official Windows 7 Support
     $InstallDocker = $false
 }
 
@@ -91,7 +91,7 @@ if ($IsWin10OrHigher) {
     $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-x64.zip"
 } else {
     # Unofficial Backport by Alex313031 for Windows 7 (v16 is most stable for kernel compatibility)
-    $NodeUrl = "https://github.com/Alex313031/node16-win7/releases/download/v16.20.2/node-v16.20.2-win-x64.zip"
+    $NodeUrl = "https://nodejs.org/dist/v13.14.0/node-v13.14.0-win-x64.zip"
 }
 $DockerInstallerUrl = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
 
@@ -255,9 +255,9 @@ if (Test-Path $NodePath) {
             # Check version without launching (avoids ADVAPI32 crash popup)
             $VerInfo = (Get-Item $NodeExe).VersionInfo.ProductVersion
             
-            # Win7: Auto-switch v13/Standard v16 -> Unofficial v16
-            if (($InstallDocker -eq $false) -and ($VerInfo -notlike "16.20.2.0")) {
-                Write-Host "Windows 7: Found Incompatible Node $VerInfo. Switching to Unofficial v16..." -ForegroundColor Yellow
+            # Win7: Auto-switch v16 -> v13
+            if (($InstallDocker -eq $false) -and ($VerInfo -notlike "13.*")) {
+                Write-Host "Windows 7: Reverting to stable Node 13..." -ForegroundColor Yellow
                 Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
                 Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
             }
@@ -1050,6 +1050,32 @@ console.log('[System] Native Module Stubs Loaded: sharp, sqlite-vec, node-pty st
 Set-Content -Path $NativeStubsPath -Value $NativeStubsContent -Encoding UTF8
 Write-Host "Generated Native Stubs: $NativeStubsPath" -ForegroundColor Green
 
+# 6.5. RECOMPILE FOR WINDOWS 7 (Essential for Node 13)
+if ($InstallDocker -eq $false) {
+    Write-Host "=== Rebuilding for Windows 7 Compatibility ===" -ForegroundColor Cyan
+    
+    $DistDir = Join-Path $ProjectDir "dist"
+    if (Test-Path $DistDir) {
+        Write-Host "Cleaning incompatible dist/ folder..." -ForegroundColor Gray
+        Remove-Item $DistDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    $TscBin = Join-Path $NodeModulesPath "typescript\bin\tsc"
+    if (Test-Path $TscBin) {
+        Write-Host "Running TypeScript Compiler (Target: ES2019/CommonJS)..." -ForegroundColor Cyan
+        # Execute tsc via node
+        & "$NodePath\node.exe" "$TscBin" --target ES2019 --module commonjs --outDir dist --skipLibCheck --moduleResolution node
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Compilation Successful!" -ForegroundColor Green
+        } else {
+            Write-Host "Compilation Failed (Warning: Check output). Attempting to run anyway..." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "TypeScript compiler not found. Attempting run with existing files..." -ForegroundColor Yellow
+    }
+}
+
 # 7. Generate 'start.bat' (Daily Launcher)
 $StartScriptPath = Join-Path $ScriptPath "start.bat"
 $StartScriptContent = @"
@@ -1108,7 +1134,8 @@ goto :NO_ENTRY
 
 :RUN_DIST
 echo [Mode] Running pre-compiled JavaScript from dist/
-"%NODE_EXE%" --experimental-specifier-resolution=node --no-warnings -r "%SCRIPT_DIR%runtime-compat.js" -r "%SCRIPT_DIR%native-stubs.js" dist/index.js
+:: [Win7 Fix] Using recompiled CommonJS code on Node 13
+"%NODE_EXE%" -r "%SCRIPT_DIR%runtime-compat.js" -r "%SCRIPT_DIR%native-stubs.js" dist/index.js
 goto :SERVER_END
 
 :RUN_SRC
