@@ -318,6 +318,38 @@ if (-not (Test-Path $ProjectDir)) {
     
     if ($InstallDocker -eq $false) {
         # Windows 7 detected
+        
+        # Download from GitHub if not found locally
+        if (-not (Test-Path $Win7ZipPath)) {
+            Write-Host "Downloading openclaw_win7.zip from GitHub Release..." -ForegroundColor Cyan
+            
+            $ReleaseUrl = "https://github.com/omtkts/OpenClaw_Automatic_Win7/releases/download/v1.0/openclaw_win7.zip"
+            
+            try {
+                $wc = New-Object System.Net.WebClient
+                Write-Host "Download URL: $ReleaseUrl" -ForegroundColor Gray
+                Write-Host "This may take a few minutes (1+ GB file)..." -ForegroundColor Yellow
+                
+                $wc.DownloadFile($ReleaseUrl, $Win7ZipPath)
+                
+                if ((Test-Path $Win7ZipPath) -and ((Get-Item $Win7ZipPath).Length -gt 100000000)) {
+                    Write-Host "Download complete!" -ForegroundColor Green
+                } else {
+                    Write-Host "[ERROR] Download failed or file corrupted" -ForegroundColor Red
+                    Remove-Item $Win7ZipPath -Force -ErrorAction SilentlyContinue
+                }
+            } catch {
+                Write-Host "[ERROR] Download failed: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "" -ForegroundColor Yellow
+                Write-Host "Manual download:" -ForegroundColor Yellow
+                Write-Host "  $ReleaseUrl" -ForegroundColor White
+                Write-Host "" -ForegroundColor Yellow
+                Write-Host "Save to:" -ForegroundColor Yellow
+                Write-Host "  $Win7ZipPath" -ForegroundColor White
+            }
+        }
+        
+        # Extract ZIP
         if (Test-Path $Win7ZipPath) {
             Write-Host "Windows 7 Mode: Extracting openclaw_win7.zip..." -ForegroundColor Cyan
             
@@ -326,10 +358,18 @@ if (-not (Test-Path $ProjectDir)) {
             $destDir = $shell.NameSpace($ScriptPath)
             
             try {
+                Write-Host "Extracting... (this may take a few minutes)" -ForegroundColor Gray
                 $destDir.CopyHere($zipFn.Items(), 16)
                 
                 $ExtractedDir = Join-Path $ScriptPath "openclaw_win7"
                 if (Test-Path $ExtractedDir) {
+                    # Remove existing openclaw folder if exists
+                    if (Test-Path $ProjectDir) {
+                        Write-Host "Removing old openclaw folder..." -ForegroundColor Gray
+                        cmd /c "rmdir /s /q `"$ProjectDir`""
+                        Start-Sleep -Seconds 2
+                    }
+                    
                     Rename-Item $ExtractedDir "openclaw"
                     $PackageSuccess = $true
                     Write-Host "openclaw_win7.zip extracted successfully!" -ForegroundColor Green
@@ -338,17 +378,6 @@ if (-not (Test-Path $ProjectDir)) {
             } catch {
                 Write-Host "[WARN] ZIP extraction failed: $($_.Exception.Message)" -ForegroundColor Yellow
             }
-        } else {
-            Write-Host "========================================================" -ForegroundColor Red
-            Write-Host "[ERROR] openclaw_win7.zip not found!" -ForegroundColor Red
-            Write-Host "" -ForegroundColor Red
-            Write-Host "Windows 7 requires pre-built package." -ForegroundColor Yellow
-            Write-Host "Please download:" -ForegroundColor Yellow
-            Write-Host "  https://github.com/YOUR_REPO/releases/latest" -ForegroundColor White
-            Write-Host "" -ForegroundColor Yellow
-            Write-Host "Place openclaw_win7.zip in:" -ForegroundColor Yellow  
-            Write-Host "  $ScriptPath" -ForegroundColor White
-            Write-Host "========================================================" -ForegroundColor Red
         }
     }
     
