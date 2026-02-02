@@ -323,7 +323,7 @@ if (-not (Test-Path $ProjectDir)) {
         if (-not (Test-Path $Win7ZipPath)) {
             Write-Host "Downloading openclaw_win7.zip from GitHub Release..." -ForegroundColor Cyan
             
-            $ReleaseUrl = "https://github.com/omtkts/OpenClaw_Automatic_Win7/releases/download/v1.0/openclaw_win7.zip"
+            $ReleaseUrl = "https://github.com/tyson-kim/OpenClaw_Automatic_Win7/releases/download/v1.0/openclaw_win7.zip"
             
             try {
                 $wc = New-Object System.Net.WebClient
