@@ -1108,7 +1108,7 @@ goto :NO_ENTRY
 
 :RUN_DIST
 echo [Mode] Running pre-compiled JavaScript from dist/
-"%NODE_EXE%" -r "%SCRIPT_DIR%runtime-compat.js" -r "%SCRIPT_DIR%native-stubs.js" dist/index.js
+"%NODE_EXE%" --experimental-specifier-resolution=node --no-warnings -r "%SCRIPT_DIR%runtime-compat.js" -r "%SCRIPT_DIR%native-stubs.js" dist/index.js
 goto :SERVER_END
 
 :RUN_SRC
