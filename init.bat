@@ -465,8 +465,9 @@ if (-not (Test-Path $ProjectDir)) {
         }
     }
     
-    # ========== FALLBACK: GitHub ZIP (both modes) ==========
-    if (-not $PackageSuccess) {
+    # ========== FALLBACK: GitHub ZIP (Windows 10+ only) ==========
+    # Windows 7 MUST use openclaw_win7.zip (has dist/ and node_modules)
+    if (-not $PackageSuccess -and $InstallDocker -ne $false) {
         Write-Host "--------------------------------------------------------" -ForegroundColor Yellow
         Write-Host "Fallback: GitHub ZIP download (browser method)..." -ForegroundColor Yellow
         Write-Host "--------------------------------------------------------" -ForegroundColor Yellow
@@ -513,6 +514,18 @@ if (-not (Test-Path $ProjectDir)) {
             }
             Remove-Item $SourceZipFile -Force -ErrorAction SilentlyContinue
         }
+    } elseif (-not $PackageSuccess -and $InstallDocker -eq $false) {
+        # Windows 7: No fallback, must use openclaw_win7.zip
+        Write-Host "========================================================" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install OpenClaw on Windows 7" -ForegroundColor Red
+        Write-Host "" -ForegroundColor Red
+        Write-Host "openclaw_win7.zip download failed." -ForegroundColor Yellow
+        Write-Host "Manual download required:" -ForegroundColor Yellow
+        Write-Host "  https://github.com/tyson-kim/OpenClaw_Automatic_Win7/releases/download/v1.0/openclaw_win7.zip" -ForegroundColor White
+        Write-Host "" -ForegroundColor Yellow
+        Write-Host "Place the ZIP in the same folder as init.bat" -ForegroundColor Yellow
+        Write-Host "Then run init.bat again." -ForegroundColor Yellow
+        Write-Host "========================================================" -ForegroundColor Red
     }
     
     if (-not $PackageSuccess) {
