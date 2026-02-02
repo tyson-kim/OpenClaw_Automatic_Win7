@@ -80,7 +80,7 @@ if ($IsWin10OrHigher) {
 }
 else {
     Write-Host ">> Detected Windows 7/Legacy (Version $($OSVersion.Major).$($OSVersion.Minor))" -ForegroundColor Yellow
-    $NodeVersion = "v13.14.0"  # Official Windows 7 Support
+    $NodeVersion = "v16.20.2"  # Unofficial Backport (Alex313031)
     $InstallDocker = $false
 }
 
@@ -91,7 +91,7 @@ if ($IsWin10OrHigher) {
     $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-x64.zip"
 } else {
     # Unofficial Backport by Alex313031 for Windows 7 (v16 is most stable for kernel compatibility)
-    $NodeUrl = "https://nodejs.org/dist/v13.14.0/node-v13.14.0-win-x64.zip"
+    $NodeUrl = "https://github.com/Alex313031/node16-win7/releases/download/v16.20.2/node-v16.20.2-win-x64.zip"
 }
 $DockerInstallerUrl = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
 
@@ -255,9 +255,9 @@ if (Test-Path $NodePath) {
             # Check version without launching (avoids ADVAPI32 crash popup)
             $VerInfo = (Get-Item $NodeExe).VersionInfo.ProductVersion
             
-            # Win7: Auto-downgrade v16 -> v13 if found
-            if (($InstallDocker -eq $false) -and ($VerInfo -notlike "13.*")) {
-                Write-Host "Windows 7: Found incompatible Node $VerInfo. Downgrading..." -ForegroundColor Yellow
+            # Win7: Auto-switch v13/Standard v16 -> Unofficial v16
+            if (($InstallDocker -eq $false) -and ($VerInfo -notlike "16.20.2.0")) {
+                Write-Host "Windows 7: Found Incompatible Node $VerInfo. Switching to Unofficial v16..." -ForegroundColor Yellow
                 Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
                 Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
             }
