@@ -322,30 +322,98 @@ if (-not (Test-Path $ProjectDir)) {
         # Download from GitHub if not found locally
         if (-not (Test-Path $Win7ZipPath)) {
             Write-Host "Downloading openclaw_win7.zip from GitHub Release..." -ForegroundColor Cyan
-            
             $ReleaseUrl = "https://github.com/tyson-kim/OpenClaw_Automatic_Win7/releases/download/v1.0/openclaw_win7.zip"
             
+            # Try 1: PowerShell WebClient (Standard)
+            $DownloadSuccess = $false
             try {
+                # Force TLS 1.2 again just in case
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [int]3072
+                
                 $wc = New-Object System.Net.WebClient
-                Write-Host "Download URL: $ReleaseUrl" -ForegroundColor Gray
-                Write-Host "This may take a few minutes (1+ GB file)..." -ForegroundColor Yellow
-                
+                Write-Host "Attempt 1: WebClient..." -ForegroundColor Gray
                 $wc.DownloadFile($ReleaseUrl, $Win7ZipPath)
-                
                 if ((Test-Path $Win7ZipPath) -and ((Get-Item $Win7ZipPath).Length -gt 100000000)) {
+                    $DownloadSuccess = $true
                     Write-Host "Download complete!" -ForegroundColor Green
-                } else {
-                    Write-Host "[ERROR] Download failed or file corrupted" -ForegroundColor Red
-                    Remove-Item $Win7ZipPath -Force -ErrorAction SilentlyContinue
                 }
             } catch {
-                Write-Host "[ERROR] Download failed: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "" -ForegroundColor Yellow
-                Write-Host "Manual download:" -ForegroundColor Yellow
-                Write-Host "  $ReleaseUrl" -ForegroundColor White
-                Write-Host "" -ForegroundColor Yellow
-                Write-Host "Save to:" -ForegroundColor Yellow
-                Write-Host "  $Win7ZipPath" -ForegroundColor White
+                Write-Host "WebClient failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+            
+            # Try 2: BITSADMIN (Windows 7 Fallback) - More robust for older TLS
+            if (-not $DownloadSuccess) {
+                Write-Host "Attempt 2: BITSADMIN (Background Intelligent Transfer Service)..." -ForegroundColor Cyan
+                cmd /c "bitsadmin /transfer OpenClawDownload /priority FOREGROUND `"$ReleaseUrl`" `"$Win7ZipPath`""
+                
+                if ((Test-Path $Win7ZipPath) -and ((Get-Item $Win7ZipPath).Length -gt 100000000)) {
+                    $DownloadSuccess = $true
+                    Write-Host "BITS Download complete!" -ForegroundColor Green
+                }
+            }
+            
+            # Try 3: Manual Fallback (Watch Downloads Folder)
+            if (-not $DownloadSuccess) {
+                Write-Host ""
+                Write-Host "--------------------------------------------------------" -ForegroundColor Red
+                Write-Host "[ERROR] Automatic Download Failed (Timeout or TLS Limit)" -ForegroundColor Yellow
+                Write-Host "Monitoring Downloads folder for manual download..." -ForegroundColor White
+                Write-Host "Browser opening in 3 seconds..." -ForegroundColor Cyan
+                Write-Host "--------------------------------------------------------" -ForegroundColor Red
+                Start-Sleep -Seconds 3
+                Start-Process $ReleaseUrl
+                
+                # Smart Detection: Find REAL Downloads folder
+                try {
+                    $RegPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+                    $DownDir = (Get-ItemProperty $RegPath)."{374DE290-123F-4565-9164-39C4925E467B}"
+                    $UserDownloads = [System.Environment]::ExpandEnvironmentVariables($DownDir)
+                } catch {
+                    $UserDownloads = Join-Path $Home "Downloads"
+                }
+                
+                $TargetName = "openclaw_win7.zip"
+                $DownloadedSource = Join-Path $UserDownloads $TargetName
+                
+                Write-Host "Waiting for '$TargetName' in: $UserDownloads" -ForegroundColor Gray
+                
+                # Wait loop (up to 10 minutes for 1GB file)
+                $Timeout = 0
+                while ((-not (Test-Path $Win7ZipPath)) -and ($Timeout -lt 600)) {
+                    if (Test-Path $DownloadedSource) {
+                        # Wait for file lock release (download finish)
+                        $PrevSize = 0
+                        while ($true) {
+                            $CurrSize = (Get-Item $DownloadedSource).Length
+                            if (($CurrSize -eq $PrevSize) -and ($CurrSize -gt 100000000)) { break }
+                            $PrevSize = $CurrSize
+                            Write-Host "Downloading... $($CurrSize / 1MB) MB" -NoNewline -ForegroundColor Gray; Write-Host "`r" -NoNewline
+                            Start-Sleep -Seconds 2
+                        }
+                        
+                        Write-Host "`nDownload detected! Moving file..." -ForegroundColor Green
+                        Move-Item $DownloadedSource $Win7ZipPath -Force -ErrorAction Stop
+                        $DownloadSuccess = $true
+                        break
+                    }
+                    if ($Timeout % 5 -eq 0) { Write-Host "." -NoNewline }
+                    Start-Sleep -Seconds 1
+                    $Timeout++
+                }
+            }
+            
+            # Failed?
+            if (-not $DownloadSuccess) {
+                Write-Host ""
+                Write-Host "========================================================" -ForegroundColor Red
+                Write-Host "[ERROR] Download FAILED!" -ForegroundColor Red
+                Write-Host "File not found in Downloads folder after 10 minutes." -ForegroundColor Yellow
+                Write-Host "Please place 'openclaw_win7.zip' in this folder manually." -ForegroundColor Yellow
+                Write-Host "========================================================" -ForegroundColor Red
+                Write-Host "Press any key to exit..."
+                if ($Host.UI.RawUI.KeyAvailable) { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") }
+                $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                Exit
             }
         }
         
