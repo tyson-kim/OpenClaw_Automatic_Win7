@@ -80,7 +80,7 @@ if ($IsWin10OrHigher) {
 }
 else {
     Write-Host ">> Detected Windows 7/Legacy (Version $($OSVersion.Major).$($OSVersion.Minor))" -ForegroundColor Yellow
-    $NodeVersion = "v16.20.2"  # Unofficial Backport (Alex313031)
+    $NodeVersion = "v13.14.0"  # Official Windows 7 Support
     $InstallDocker = $false
 }
 
@@ -91,7 +91,7 @@ if ($IsWin10OrHigher) {
     $NodeUrl = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-x64.zip"
 } else {
     # Unofficial Backport by Alex313031 for Windows 7 (v16 is most stable for kernel compatibility)
-    $NodeUrl = "https://github.com/Alex313031/node16-win7/releases/download/v16.20.2/node-v16.20.2-win-x64.zip"
+    $NodeUrl = "https://nodejs.org/dist/v13.14.0/node-v13.14.0-win-x64.zip"
 }
 $DockerInstallerUrl = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
 
@@ -247,16 +247,26 @@ Invoke-DownloadAndExtract -Url $MinGitUrl -DestPath $GitPath -Name "Git"
 $env:PATH = "$GitPath\cmd;$env:PATH"
 
 # 3. Setup Portable Node.js
-# FIX: Force Upgrade from Legacy Node v13 to Unofficial v18
+# FIX: Ensure compatible Node version (Win7 uses v13)
 if (Test-Path $NodePath) {
     Try {
-        $CurrentNodeVer = & "$NodePath\node.exe" -v
-        if ($CurrentNodeVer -like "v13.*") {
-            Write-Host "Detected Legacy Node v13. Removing to upgrade to Unofficial v18..." -ForegroundColor Yellow
-            Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
+        $NodeExe = Join-Path $NodePath "node.exe"
+        if (Test-Path $NodeExe) {
+            # Check version without launching (avoids ADVAPI32 crash popup)
+            $VerInfo = (Get-Item $NodeExe).VersionInfo.ProductVersion
+            
+            # Win7: Auto-downgrade v16 -> v13 if found
+            if (($InstallDocker -eq $false) -and ($VerInfo -notlike "13.*")) {
+                Write-Host "Windows 7: Found incompatible Node $VerInfo. Downgrading..." -ForegroundColor Yellow
+                Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
+                Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
+            }
+        } else {
+             Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
         }
     } Catch {
-        # Ignore errors if node isn't executable or other issues
+        # Corrupt detected -> Reinstall
+        Remove-Item -Recurse -Force $NodePath -ErrorAction SilentlyContinue
     }
 }
 
@@ -427,18 +437,38 @@ if (-not (Test-Path $ProjectDir)) {
             
             try {
                 Write-Host "Extracting... (this may take a few minutes)" -ForegroundColor Gray
-                $destDir.CopyHere($zipFn.Items(), 16)
                 
-                $ExtractedDir = Join-Path $ScriptPath "openclaw_win7"
-                if (Test-Path $ExtractedDir) {
-                    # Remove existing openclaw folder if exists
-                    if (Test-Path $ProjectDir) {
-                        Write-Host "Removing old openclaw folder..." -ForegroundColor Gray
-                        cmd /c "rmdir /s /q `"$ProjectDir`""
-                        Start-Sleep -Seconds 2
-                    }
-                    
-                    Rename-Item $ExtractedDir "openclaw"
+                # Extract to staging folder to handle flat/nested zips
+                $StagingDir = Join-Path $ScriptPath "openclaw_staging"
+                if (Test-Path $StagingDir) { cmd /c "rmdir /s /q `"$StagingDir`"" }
+                New-Item -ItemType Directory -Path $StagingDir | Out-Null
+                
+                $destShell = $shell.NameSpace($StagingDir)
+                $destShell.CopyHere($zipFn.Items(), 16)
+                
+                # Clean up existing target
+                if (Test-Path $ProjectDir) {
+                    Write-Host "Removing old openclaw folder..." -ForegroundColor Gray
+                    cmd /c "rmdir /s /q `"$ProjectDir`""
+                    Start-Sleep -Seconds 2
+                }
+
+                # Check for nested folder (Case A: openclaw_win7 inside ZIP)
+                $NestedDir = Join-Path $StagingDir "openclaw_win7"
+                
+                if (Test-Path $NestedDir) {
+                    Write-Host "Nested ZIP structure detected." -ForegroundColor Gray
+                    Move-Item $NestedDir $ProjectDir -Force
+                } else {
+                    # Case B: Flat ZIP (dist/ at root) -> Rename staging to openclaw
+                    Write-Host "Flat ZIP structure detected." -ForegroundColor Gray
+                    Move-Item $StagingDir $ProjectDir -Force
+                }
+                
+                # Cleanup staging if it still exists
+                if (Test-Path $StagingDir) { cmd /c "rmdir /s /q `"$StagingDir`"" }
+                
+                if (Test-Path $ProjectDir) {
                     $PackageSuccess = $true
                     Write-Host "openclaw_win7.zip extracted successfully!" -ForegroundColor Green
                     Write-Host "node_modules included (Windows 7 ready)" -ForegroundColor Green
@@ -594,6 +624,10 @@ if (-not (Test-Path $ProjectDir)) {
         Write-Host "Place the ZIP in the same folder as init.bat" -ForegroundColor Yellow
         Write-Host "Then run init.bat again." -ForegroundColor Yellow
         Write-Host "========================================================" -ForegroundColor Red
+        Write-Host "Press any key to exit setup..." -ForegroundColor Yellow
+        if ($Host.UI.RawUI.KeyAvailable) { $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") }
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        Exit
     }
     
     if (-not $PackageSuccess) {
