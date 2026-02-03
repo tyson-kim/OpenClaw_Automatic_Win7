@@ -21,25 +21,28 @@ exit /b 1
 echo [VM Manager] Installing Environment...
 if not exist "%VM_DIR%" mkdir "%VM_DIR%"
 
-:: 1. Download QEMU Installer
+:: 1. QEMU Setup
 if not exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" (
-    echo [VM Manager] Downloading QEMU 7.2.0 for Windows 7...
-    call "%ROOT_DIR%\bin\downloader.cmd" "%QemuUrl%" "%VM_DIR%\qemu-setup.exe"
-    if errorlevel 1 goto error
+    :: Check for manual download
+    if exist "%VM_DIR%\qemu-setup.exe" (
+        echo [VM Manager] Found manual download: qemu-setup.exe. Skipping download.
+    ) else (
+        echo [VM Manager] Downloading QEMU 7.2.0...
+        call "%ROOT_DIR%\bin\downloader.cmd" "%QemuUrl%" "%VM_DIR%\qemu-setup.exe"
+        if errorlevel 1 goto error
+    )
     
     echo [VM Manager] Installing QEMU silently...
-    :: Extract/Install QEMU to vm\qemu
-    :: /S = Silent, /D = Destination (Available in NSIS installers)
     "%VM_DIR%\qemu-setup.exe" /S /D=%VM_DIR%\qemu
     
-    :: Cleanup
-    del "%VM_DIR%\qemu-setup.exe"
+    :: Cleanup (Optional: Keep it if user wants to keep the installer)
+    :: del "%VM_DIR%\qemu-setup.exe"
     echo [VM Manager] QEMU installed.
 )
 
-:: 2. Download System Image
+:: 2. System Image
 if not exist "%VM_DIR%\system.img" (
-    echo [VM Manager] Downloading Alpine Linux System Image...
+    echo [VM Manager] Downloading System Image...
     call "%ROOT_DIR%\bin\downloader.cmd" "%AlpineImageUrl%" "%VM_DIR%\system.img"
     if errorlevel 1 goto error
 )
@@ -58,14 +61,9 @@ if not exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" (
     exit /b 1
 )
 
-echo [VM Manager] Launching QEMU (Window should appear)...
-echo [Info] NOTE: Since this is a fresh ISO, it will boot to a login prompt.
-echo [Info] Login: root (no password)
-echo.
+echo [VM Manager] Launching QEMU...
+echo [Info] Login: root
 
-:: Launch QEMU
-:: -cdrom for ISO (system.img)
-:: -net nic -net user,hostfwd=tcp::%HostPort%-:%GuestPort% (Network forwarding)
 start "" "%VM_DIR%\qemu\qemu-system-x86_64.exe" ^
     -m %RamSize% ^
     -smp %CpuCores% ^
@@ -73,9 +71,8 @@ start "" "%VM_DIR%\qemu\qemu-system-x86_64.exe" ^
     -net nic,model=e1000 -net user,hostfwd=tcp::%HostPort%-:%GuestPort% ^
     %ImageParams%
 
-echo [VM Manager] VM launched in separate window.
-echo [VM Manager] Once Web IDE software is running inside the VM, it will be at:
-echo    http://localhost:%HostPort%
+echo [VM Manager] VM launched.
+echo [VM Manager] Access at: http://localhost:%HostPort%
 exit /b 0
 
 :reset
@@ -86,10 +83,12 @@ if /i not "%delconf%"=="yes" exit /b 0
 
 if exist "%VM_DIR%\system.img" del "%VM_DIR%\system.img"
 if exist "%VM_DIR%\qemu" rmdir /s /q "%VM_DIR%\qemu"
+if exist "%VM_DIR%\qemu-setup.exe" del "%VM_DIR%\qemu-setup.exe"
 echo [VM Manager] Environment reset.
 exit /b 0
 
 :error
-echo [Error] An error occurred.
+echo [Error] Installation failed.
+echo [Tip] For manual install, download files to '%VM_DIR%' and try again.
 pause
 exit /b 1
