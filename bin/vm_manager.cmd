@@ -21,16 +21,17 @@ exit /b 1
 echo [VM Manager] Installing Environment...
 if not exist "%VM_DIR%" mkdir "%VM_DIR%"
 
-:: QEMU Detection (ONLY Check, NO Download)
+:: QEMU Detection (Hardcoded Check)
 call :find_qemu
 if "%QEMU_EXE%"=="" (
     echo.
     echo [Error] QEMU not found!
-    echo [Info] Please install QEMU manually.
-    echo        (Recommended: QEMU 6.2.0 for Windows 7)
+    echo [Info] Searched in:
+    echo        - C:\Program Files\qemu\qemu-system-x86_64.exe
+    echo        - C:\Program Files (x86)\qemu\qemu-system-x86_64.exe
+    echo        - %VM_DIR%\qemu\qemu-system-x86_64.exe
     echo.
-    echo [Tip] If installed, make sure it is in 'C:\Program Files\qemu'
-    echo       or inside the 'vm\qemu' folder.
+    echo [Tip] Please verify QEMU is installed and the file 'qemu-system-x86_64.exe' exists.
     pause
     exit /b 1
 )
@@ -82,20 +83,21 @@ echo [VM Manager] Resetting Environment...
 set /p "delconf=Type 'yes' to delete (VM Image only): "
 if /i not "%delconf%"=="yes" exit /b 0
 if exist "%VM_DIR%\system.img" del "%VM_DIR%\system.img"
-:: Don't delete QEMU since it's manual now
 if exist "%VM_DIR%\qemu-setup.exe" del "%VM_DIR%\qemu-setup.exe"
 exit /b 0
 
 :find_qemu
 set "QEMU_EXE="
-:: 1. Check Local
+:: 1. Check Hardcoded paths (To bypass variable issues)
+if exist "C:\Program Files\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=C:\Program Files\qemu\qemu-system-x86_64.exe" & exit /b 0
+if exist "C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" & exit /b 0
+
+:: 2. Check Local
 if exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%VM_DIR%\qemu\qemu-system-x86_64.exe" & exit /b 0
-:: 2. Check 64-bit Program Files (Native)
+
+:: 3. Check Env Vars (Legacy)
 if exist "%ProgramFiles%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%ProgramFiles%\qemu\qemu-system-x86_64.exe" & exit /b 0
-:: 3. Check 64-bit Program Files (from 32-bit cmd)
 if defined ProgramW6432 if exist "%ProgramW6432%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%ProgramW6432%\qemu\qemu-system-x86_64.exe" & exit /b 0
-:: 4. Check 32-bit Program Files
-if exist "%ProgramFiles(x86)%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%ProgramFiles(x86)%\qemu\qemu-system-x86_64.exe" & exit /b 0
 exit /b 0
 
 :error
