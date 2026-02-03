@@ -21,32 +21,74 @@ exit /b 1
 echo [VM Manager] Installing Environment...
 if not exist "%VM_DIR%" mkdir "%VM_DIR%"
 
-:: 1. QEMU Setup
+:: 1. QEMU Setup Checking
 if not exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" (
-    :: Check for manual download
-    if exist "%VM_DIR%\qemu-setup.exe" (
-        echo [VM Manager] Found manual download: qemu-setup.exe. Skipping download.
-    ) else (
-        echo [VM Manager] Downloading QEMU 7.2.0...
-        call "%ROOT_DIR%\bin\downloader.cmd" "%QemuUrl%" "%VM_DIR%\qemu-setup.exe"
-        if errorlevel 1 goto error
+    echo [Check] Looking for QEMU installer...
+    
+    set "INSTALLER=%VM_DIR%\qemu-setup.exe"
+    
+    :: Strategy A: Check specific name in VM dir
+    if exist "%VM_DIR%\qemu-setup.exe" goto found_qemu
+    
+    :: Strategy B: Check original filename in VM dir
+    if exist "%VM_DIR%\qemu-w64-setup-20221230.exe" (
+        set "INSTALLER=%VM_DIR%\qemu-w64-setup-20221230.exe"
+        goto found_qemu
     )
     
+    :: Strategy C: Check root dir (D:\AgentVM)
+    if exist "%ROOT_DIR%\qemu-setup.exe" (
+        copy "%ROOT_DIR%\qemu-setup.exe" "%VM_DIR%\qemu-setup.exe" >nul
+        goto found_qemu
+    )
+    if exist "%ROOT_DIR%\qemu-w64-setup-20221230.exe" (
+        copy "%ROOT_DIR%\qemu-w64-setup-20221230.exe" "%VM_DIR%\qemu-setup.exe" >nul
+        goto found_qemu
+    )
+
+    :: Not found, download it
+    echo [VM Manager] File not found. Downloading QEMU...
+    call "%ROOT_DIR%\bin\downloader.cmd" "%QemuUrl%" "%VM_DIR%\qemu-setup.exe"
+    if errorlevel 1 goto error
+    goto found_qemu
+
+:found_qemu
+    echo [VM Manager] Found installer: !INSTALLER!
     echo [VM Manager] Installing QEMU silently...
-    "%VM_DIR%\qemu-setup.exe" /S /D=%VM_DIR%\qemu
-    
-    :: Cleanup (Optional: Keep it if user wants to keep the installer)
-    :: del "%VM_DIR%\qemu-setup.exe"
+    "!INSTALLER!" /S /D=%VM_DIR%\qemu
     echo [VM Manager] QEMU installed.
 )
 
-:: 2. System Image
+:: 2. System Image Checking
 if not exist "%VM_DIR%\system.img" (
+    echo [Check] Looking for System Image...
+    
+    :: Strategy A: Check specific name in VM dir
+    if exist "%VM_DIR%\system.img" goto found_img
+    
+    :: Strategy B: Check original ISO name in VM dir
+    if exist "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" (
+        ren "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" "system.img"
+        goto found_img
+    )
+
+    :: Strategy C: Check root dir
+    if exist "%ROOT_DIR%\system.img" (
+        move "%ROOT_DIR%\system.img" "%VM_DIR%\system.img" >nul
+        goto found_img
+    )
+    if exist "%ROOT_DIR%\alpine-virt-3.21.2-x86_64.iso" (
+        move "%ROOT_DIR%\alpine-virt-3.21.2-x86_64.iso" "%VM_DIR%\system.img" >nul
+        goto found_img
+    )
+
+    :: Not found, download it
     echo [VM Manager] Downloading System Image...
     call "%ROOT_DIR%\bin\downloader.cmd" "%AlpineImageUrl%" "%VM_DIR%\system.img"
     if errorlevel 1 goto error
 )
 
+:found_img
 echo [VM Manager] Installation Complete.
 exit /b 0
 
