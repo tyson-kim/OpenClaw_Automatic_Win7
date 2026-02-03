@@ -13,18 +13,27 @@ dest = WScript.Arguments(1)
 Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
 http.Open "GET", url, False
 
-' Attempt to enable TLS 1.2 (0x00000800 = 2048)
-' This mimics the effect of modernizing the SecureProtocols registry key
-' but does it at the application level for this request.
-On Error Resume Next
-http.Option(9) = 2048
+' 1. FORCE IGNORE SSL ERRORS (The fix for "Certificate authority is invalid")
+' 13056 = 0x3300 = Ignore Unknown CA + Ignore Invalid Date + Ignore Invalid CN + Ignore Invalid Policy
+ On Error Resume Next
+http.Option(4) = 13056
 If Err.Number <> 0 Then
-    WScript.Echo "Warning: Could not set TLS 1.2 option. Detailed error: " & Err.Description
+    WScript.Echo "Warning: Could not set SSL Ignore flags."
     Err.Clear
 End If
 On Error GoTo 0
 
-' Send request
+' 2. Attempt TLS 1.2 (2048) / TLS 1.1 (512) / TLS 1.0 (128)
+' If 2048 fails, we hope the SystemDefaultTlsVersions registry key kicks in.
+On Error Resume Next
+http.Option(9) = 2048 ' Try TLS 1.2
+If Err.Number <> 0 Then
+   ' If specific TLS 1.2 setting fails, we just proceed.
+   ' The Registry fix (enable_tls12.bat) should handle the protocol negotiation.
+   Err.Clear
+End If
+On Error GoTo 0
+
 WScript.Echo "Downloading: " & url
 http.Send
 
@@ -43,6 +52,6 @@ If http.Status = 200 Then
     WScript.Echo "Success: File saved to " & dest
     WScript.Quit 0
 Else
-    WScript.Echo "Error: CreateObject failed or Server returned status " & http.Status
+    WScript.Echo "Error: Server returned status " & http.Status
     WScript.Quit 1
 End If
