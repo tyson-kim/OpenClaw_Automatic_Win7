@@ -21,7 +21,7 @@ exit /b 1
 echo [VM Manager] Installing Environment...
 if not exist "%VM_DIR%" mkdir "%VM_DIR%"
 
-:: QEMU Detection (Hardcoded Check)
+:: QEMU Detection
 call :find_qemu
 if "%QEMU_EXE%"=="" (
     echo.
@@ -31,25 +31,33 @@ if "%QEMU_EXE%"=="" (
     echo        - C:\Program Files (x86)\qemu\qemu-system-x86_64.exe
     echo        - %VM_DIR%\qemu\qemu-system-x86_64.exe
     echo.
-    echo [Tip] Please verify QEMU is installed and the file 'qemu-system-x86_64.exe' exists.
+    echo [Tip] Please verify QEMU is installed.
     pause
     exit /b 1
 )
 echo [Check] QEMU detected at: %QEMU_EXE%
 
 :check_iso
-if not exist "%VM_DIR%\system.img" (
-    echo [Check] Looking for System Image...
-    if exist "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" ren "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" "system.img" & goto found_img
-    if exist "%ROOT_DIR%\system.img" move "%ROOT_DIR%\system.img" "%VM_DIR%\system.img" >nul & goto found_img
-    
-    echo [VM Manager] Downloading System Image...
-    call "%ROOT_DIR%\bin\downloader.cmd" "%AlpineImageUrl%" "%VM_DIR%\system.img"
-    if errorlevel 1 goto error
+if exist "%VM_DIR%\system.img" goto found_img
+
+echo [Check] Looking for System Image...
+if exist "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" (
+    ren "%VM_DIR%\alpine-virt-3.21.2-x86_64.iso" "system.img"
+    goto found_img
 )
+if exist "%ROOT_DIR%\system.img" (
+    move "%ROOT_DIR%\system.img" "%VM_DIR%\system.img" >nul
+    goto found_img
+)
+    
+echo [VM Manager] Downloading System Image...
+call "%ROOT_DIR%\bin\downloader.cmd" "%AlpineImageUrl%" "%VM_DIR%\system.img"
+if errorlevel 1 goto error
 
 :found_img
 echo [VM Manager] Installation Complete.
+:: Pause to let user see the success message
+pause
 exit /b 0
 
 :start
@@ -57,10 +65,12 @@ echo [VM Manager] Starting VM...
 call :find_qemu
 if "%QEMU_EXE%"=="" (
     echo [Error] QEMU not found. Please install QEMU manually.
+    pause
     exit /b 1
 )
 if not exist "%VM_DIR%\system.img" (
     echo [Error] System image not found. Please run Install option.
+    pause
     exit /b 1
 )
 
@@ -76,6 +86,8 @@ start "QEMU" "%QEMU_EXE%" ^
 
 echo [VM Manager] VM launched.
 echo [VM Manager] Access at: http://localhost:%HostPort%
+:: Pause to confirm launch
+pause
 exit /b 0
 
 :reset
@@ -88,16 +100,31 @@ exit /b 0
 
 :find_qemu
 set "QEMU_EXE="
-:: 1. Check Hardcoded paths (To bypass variable issues)
-if exist "C:\Program Files\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=C:\Program Files\qemu\qemu-system-x86_64.exe" & exit /b 0
-if exist "C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" & exit /b 0
 
-:: 2. Check Local
-if exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%VM_DIR%\qemu\qemu-system-x86_64.exe" & exit /b 0
+:: Method 1: Hardcoded 64-bit Program Files
+if exist "C:\Program Files\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=C:\Program Files\qemu\qemu-system-x86_64.exe"
+    exit /b 0
+)
 
-:: 3. Check Env Vars (Legacy)
-if exist "%ProgramFiles%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%ProgramFiles%\qemu\qemu-system-x86_64.exe" & exit /b 0
-if defined ProgramW6432 if exist "%ProgramW6432%\qemu\qemu-system-x86_64.exe" set "QEMU_EXE=%ProgramW6432%\qemu\qemu-system-x86_64.exe" & exit /b 0
+:: Method 2: Hardcoded 32-bit Program Files
+if exist "C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=C:\Program Files (x86)\qemu\qemu-system-x86_64.exe"
+    exit /b 0
+)
+
+:: Method 3: Local VM Dir
+if exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=%VM_DIR%\qemu\qemu-system-x86_64.exe"
+    exit /b 0
+)
+
+:: Method 4: Environment Variables (Fallback)
+if exist "%ProgramFiles%\qemu\qemu-system-x86_64.exe" (
+    set "QEMU_EXE=%ProgramFiles%\qemu\qemu-system-x86_64.exe"
+    exit /b 0
+)
+
 exit /b 0
 
 :error
