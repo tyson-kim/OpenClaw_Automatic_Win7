@@ -13,17 +13,19 @@ echo [Downloader] To: %DEST%
 for %%I in ("%DEST%") do if not exist "%%~dpI" mkdir "%%~dpI"
 if exist "%DEST%" del "%DEST%"
 
-:: Method 1: PowerShell (Optimized for Win7/Legacy .NET)
-:: - Removed 'SecurityProtocol = 3072' which crashes on older .NET (relying on 'enable_tls12.bat' registry fix instead)
-:: - Added 'ServerCertificateValidationCallback = {$true}' to bypass expired Root CA errors common on Win7
-echo [Downloader] Attempting Method 1 (PowerShell with SSL Bypass)...
-
-powershell -Command "[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; (New-Object Net.WebClient).DownloadFile('%URL%', '%DEST%')"
-
+:: Method 1: VBScript (WinHTTP)
+:: Best success rate on Windows 7 KB3140245+
+echo [Downloader] Attempting Method 1 (VBScript/WinHTTP)...
+cscript //nologo "%~dp0download.vbs" "%URL%" "%DEST%"
 if exist "%DEST%" goto success
 
-:: Method 2: CertUtil
-echo [Downloader] Method 1 failed. Attempting Method 2 (CertUtil)...
+:: Method 2: PowerShell (Fallback)
+echo [Downloader] Method 1 failed. Attempting Method 2 (PowerShell)...
+powershell -Command "[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; (New-Object Net.WebClient).DownloadFile('%URL%', '%DEST%')"
+if exist "%DEST%" goto success
+
+:: Method 3: CertUtil
+echo [Downloader] Method 2 failed. Attempting Method 3 (CertUtil)...
 certutil -urlcache -split -f "%URL%" "%DEST%"
 if exist "%DEST%" (
     for %%A in ("%DEST%") do if %%~zA GTR 0 (
@@ -33,13 +35,15 @@ if exist "%DEST%" (
     del "%DEST%" >nul 2>&1
 )
 
-:: Method 3: BitsAdmin
-echo [Downloader] Method 2 failed. Attempting Method 3 (BitsAdmin)...
+:: Method 4: BitsAdmin
+echo [Downloader] Method 3 failed. Attempting Method 4 (BitsAdmin)...
 bitsadmin /transfer "OpenClawJob" "%URL%" "%DEST%"
 if exist "%DEST%" goto success
 
 echo [Error] All download methods failed.
-echo [Tip] Please manually download the file to: %DEST%
+echo [Tip] 1. Try running 'bin\enable_tls12.bat' (Administrator).
+echo [Tip] 2. Install Update KB3140245 manually if not installed.
+echo [Tip] 3. Or download manually to: %DEST%
 exit /b 1
 
 :success
