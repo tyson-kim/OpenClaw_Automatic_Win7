@@ -243,6 +243,78 @@ function Invoke-DownloadAndExtract {
     Write-Host "[$Name] Installed successfully." -ForegroundColor Green
 }
 
+function Invoke-SurgicalStubbing {
+    param([string]$TargetDir)
+    
+    Write-Host "--- Performing Surgical Stubbing for Windows 7 ---" -ForegroundColor Cyan
+    
+    # 1. Create the Universal Stub File
+    $StubContent = @"
+module.exports = {
+  // Sharp stubs
+  resize: () => ({ toBuffer: async () => Buffer.from([]) }),
+  toBuffer: async () => Buffer.from([]),
+  metadata: async () => ({ width: 0, height: 0 }),
+  png: function() { return this; },
+  jpeg: function() { return this; },
+  webp: function() { return this; },
+  clone: function() { return this; },
+  
+  // Sqlite-vec stubs
+  load: () => console.log('[STUB] sqlite-vec loaded'),
+  getLoadablePath: () => null,
+
+  // node-pty stubs
+  spawn: () => ({
+      onData: () => {},
+      onExit: () => {},
+      write: () => {},
+      kill: () => {},
+      resize: () => {}
+  })
+};
+// ESM Default Export Compatibility
+module.exports.default = module.exports;
+"@
+    
+    $StubFile = Join-Path $TargetDir "stub_universal.js"
+    Set-Content -Path $StubFile -Value $StubContent -Encoding UTF8
+    
+    # 2. List of modules to physically overwrite
+    $DangerousModules = @(
+        "sharp",
+        "sqlite-vec",
+        "@lydell/node-pty", 
+        "node-pty"
+    )
+    
+    foreach ($ModName in $DangerousModules) {
+        $ModPath = Join-Path $TargetDir "node_modules\$ModName"
+        if (Test-Path $ModPath) {
+            Write-Host "Stubbing incompatible module: $ModName" -ForegroundColor Yellow
+            
+            # Retrieve package.json to find entry point
+            $PkgJson = Join-Path $ModPath "package.json"
+            if (Test-Path $PkgJson) {
+                try {
+                    $Content = Get-Content $PkgJson | Out-String | ConvertFrom-Json
+                    $MainFile = $Content.main
+                    if (-not $MainFile) { $MainFile = "index.js" }
+                    
+                    # Force overwrite the entry file
+                    $EntryPath = Join-Path $ModPath $MainFile
+                    Copy-Item -Path $StubFile -Destination $EntryPath -Force
+                    Write-Host "  -> Replaced entry point: $MainFile" -ForegroundColor Gray
+                    
+                } catch {
+                    # Fallback: Overwrite index.js and lib/index.js
+                    Copy-Item -Path $StubFile -Destination (Join-Path $ModPath "index.js") -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
+}
+
 # --- Main Execution ---
 
 Write-Host "=== OpenClaw Environment Setup ===" -ForegroundColor Yellow
@@ -490,6 +562,9 @@ if (-not (Test-Path $ProjectDir)) {
                     $PackageSuccess = $true
                     Write-Host "openclaw_win7.zip extracted successfully!" -ForegroundColor Green
                     Write-Host "node_modules included (Windows 7 ready)" -ForegroundColor Green
+                    
+                    # FIX: Surgically Stub Native Modules
+                    Invoke-SurgicalStubbing -TargetDir $ProjectDir
                 }
             } catch {
                 Write-Host "[WARN] ZIP extraction failed: $($_.Exception.Message)" -ForegroundColor Yellow
