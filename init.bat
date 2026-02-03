@@ -3,6 +3,7 @@ setlocal
 title OpenClaw Dev Environment (Windows 7 Mode)
 cls
 
+:: Use generic names to avoid special char issues in paths
 set "ROOT_DIR=%~dp0"
 set "VM_IMG=%ROOT_DIR%vm\system.img"
 
@@ -17,13 +18,13 @@ echo.
 if exist "%VM_IMG%" (
     echo  [Status] Environment Detected via VM.
     echo.
-    echo  1. Start Web IDE (Run VM)
-    echo  2. Reset Environment (Delete VM)
+    echo  1. Start Web IDE - Run VM
+    echo  2. Reset Environment - Delete VM
     echo  3. Exit
 ) else (
     echo  [Status] Environment Not Installed.
     echo.
-    echo  1. Install Environment (Download VM)
+    echo  1. Install Environment - Download VM
     echo  2. Exit
 )
 echo.
