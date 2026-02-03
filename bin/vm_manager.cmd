@@ -56,7 +56,6 @@ if errorlevel 1 goto error
 
 :found_img
 echo [VM Manager] Installation Complete.
-:: Pause to let user see the success message
 pause
 exit /b 0
 
@@ -77,11 +76,12 @@ if not exist "%VM_DIR%\system.img" (
 echo [VM Manager] Launching QEMU...
 echo [Info] Login: root
 
+:: Use virtio instead of e1000 for Alpine Virt Kernel
 start "QEMU" "%QEMU_EXE%" ^
     -m %RamSize% ^
     -smp %CpuCores% ^
     -cdrom "%VM_DIR%\system.img" ^
-    -net nic,model=e1000 -net user,hostfwd=tcp::%HostPort%-:%GuestPort% ^
+    -net nic,model=virtio -net user,hostfwd=tcp::%HostPort%-:%GuestPort% ^
     %ImageParams%
 
 echo [VM Manager] VM launched.
@@ -100,31 +100,22 @@ exit /b 0
 
 :find_qemu
 set "QEMU_EXE="
-
-:: Method 1: Hardcoded 64-bit Program Files
 if exist "C:\Program Files\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=C:\Program Files\qemu\qemu-system-x86_64.exe"
     exit /b 0
 )
-
-:: Method 2: Hardcoded 32-bit Program Files
 if exist "C:\Program Files (x86)\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=C:\Program Files (x86)\qemu\qemu-system-x86_64.exe"
     exit /b 0
 )
-
-:: Method 3: Local VM Dir
 if exist "%VM_DIR%\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=%VM_DIR%\qemu\qemu-system-x86_64.exe"
     exit /b 0
 )
-
-:: Method 4: Environment Variables (Fallback)
 if exist "%ProgramFiles%\qemu\qemu-system-x86_64.exe" (
     set "QEMU_EXE=%ProgramFiles%\qemu\qemu-system-x86_64.exe"
     exit /b 0
 )
-
 exit /b 0
 
 :error
